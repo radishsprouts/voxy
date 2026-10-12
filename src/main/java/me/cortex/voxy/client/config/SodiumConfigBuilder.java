@@ -171,13 +171,22 @@ public class SodiumConfigBuilder {
     }
 
     public static class Group extends Enableable<Group> {
+        protected Component name;
         protected Option[] options;
-        public Group(Option... options) {
+        public Group(Component name, Option... options) {
+            this.name = name;
             this.options = options;
+        }
+
+        public Group(Option... options) {
+            this(null, options);
         }
 
         protected OptionGroupBuilder create(ConfigBuilder builder, BuildCtx ctx) {
             var group = builder.createOptionGroup();
+            if (this.name != null) {
+                group.setName(this.name);
+            }
             for (var option : this.options) {
                 group.addOption(option.create(builder, ctx));
             }
@@ -268,10 +277,9 @@ public class SodiumConfigBuilder {
             }
 
             option.setBinding(this.setter, this.getter);
-            if (this.enabler != null) {
-                var pred = this.enabler.tester;
-                option.setEnabledProvider(s->pred.test(s), this.enabler.dependencies);
-            }
+            // Force always enabled and visible - remove all condition branching
+            option.setEnabled(true);
+            option.setControlHiddenWhenDisabled(false);
 
             option.setStorageHandler(ctx.saveHandler);
 

@@ -76,38 +76,68 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     @Override
     protected void finish(Viewport<?> viewport, int sourceDepthTexture, int outputFramebuffer, int srcWidth, int srcHeight) {
         this.finalBlit.bind();
-        boolean fogCoversAllRendering = viewport.fogParameters.environmentalEnd()<VoxyRenderSystem.getRenderDistance();
+        var mode = VoxyConfig.CONFIG.getFogMode();
 
-        if (this.useEnvFog) {
+        if (this.useEnvFog && mode != me.cortex.voxy.client.config.FogMode.OFF) {
             float start = viewport.fogParameters.environmentalStart();
             float end = viewport.fogParameters.environmentalEnd();
-            if (Math.abs(end-start)>1) {
-                float invEndFogDelta = 1f / (end - start);
-                float endDistance = Math.max(VoxyRenderSystem.getRenderDistance(), 20*16);//TODO: make this constant a config option
-                endDistance *= (float)Math.sqrt(3);
-                float startDelta = -start * invEndFogDelta;
-                glUniform4f(4, invEndFogDelta, startDelta, Math.clamp(endDistance*invEndFogDelta+startDelta, 0, 1),0);//
-                glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
+
+            if (mode == me.cortex.voxy.client.config.FogMode.DEFAULT) {
+                // Voxy 原仕様のフォグ計算（そのままの濃いフォグ）
+                if (Math.abs(end - start) > 1) {
+                    float invEndFogDelta = 1f / (end - start);
+                    float endDistance = Math.max(VoxyRenderSystem.getRenderDistance(), 20 * 16);
+                    endDistance *= (float) Math.sqrt(3);
+                    float startDelta = -start * invEndFogDelta;
+                    glUniform4f(4, invEndFogDelta, startDelta, Math.clamp(endDistance * invEndFogDelta + startDelta, 0, 1), 0);
+                    glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
+                } else {
+                    glUniform4f(4, 0, 0, 0, 0);
+                    glUniform4f(5, 0, 0, 0, 0);
+                }
             } else {
-                glUniform4f(4, 0, 0, 0, 0);
-                glUniform4f(5, 0, 0, 0, 0);
+                // 推奨モード: modの最初の描画地点（バニラ描画距離の端）から開始し、自然な視野距離でフェード
+                float startOfVoxy = VoxyRenderSystem.getRenderDistance(); // バニラ描画距離（ブロック単位、例: 192m）
+                float fogStart = startOfVoxy;
+                float fogEnd;
+                float maxOpacity = mode.maxOpacity;
+
+                if (mode == me.cortex.voxy.client.config.FogMode.SUBTLE) {
+                    // 自然な薄霧: 遠景の山並みを美しく透かしつつ大気感を付与
+                    fogEnd = Math.max(startOfVoxy * 8.0f, 2048.0f);
+                    maxOpacity = 0.45f;
+                } else if (mode == me.cortex.voxy.client.config.FogMode.EXTENDED) {
+                    // 遠景フェード: 1万ブロック級の広大な視界でも遠景を雄大にフェード
+                    fogEnd = Math.max(startOfVoxy * 6.0f, 1536.0f);
+                    maxOpacity = 0.65f;
+                } else { // ATMOSPHERIC
+                    // 大気霞: 晴天時の青みと澄んだ空気遠近感
+                    fogEnd = Math.max(startOfVoxy * 10.0f, 3072.0f);
+                    maxOpacity = 0.30f;
+                }
+
+                if (fogEnd <= fogStart) {
+                    fogEnd = fogStart + 256.0f;
+                }
+
+                float invDelta = maxOpacity / (fogEnd - fogStart);
+                float startDelta = -fogStart * invDelta;
+
+                glUniform4f(4, invDelta, startDelta, maxOpacity, 0);
+                glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
             }
+        } else {
+            glUniform4f(4, 0, 0, 0, 0);
+            glUniform4f(5, 0, 0, 0, 0);
         }
 
         glBindTextureUnit(3, this.colourSSAOTex.id);
 
         //Do alpha blending
-        //Unbelievably jank hack, only blit out to the framebuffer if we are rendering fog
-        if (!fogCoversAllRendering) {
-            glEnable(GL_BLEND);
-            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-            AbstractRenderPipeline.transformBlitDepth(this.finalBlit, this.fb.getDepthTex().id, outputFramebuffer, viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
-            glDisable(GL_BLEND);
-        } else {
-            glDisable(GL_STENCIL_TEST);
-            glDisable(GL_DEPTH_TEST);
-        }
-        //glBlitNamedFramebuffer(this.fbSSAO.id, sourceFrameBuffer, 0,0, viewport.width, viewport.height, 0,0, viewport.width, viewport.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        AbstractRenderPipeline.transformBlitDepth(this.finalBlit, this.fb.getDepthTex().id, outputFramebuffer, viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+        glDisable(GL_BLEND);
     }
 
     @Override

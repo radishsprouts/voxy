@@ -19,8 +19,6 @@ import net.minecraft.resources.Identifier;
 public class VoxyConfigMenu implements ConfigEntryPoint {
     @Override
     public void registerConfigLate(ConfigBuilder B) {
-        if (!VoxyCommon.isAvailable()) return;//Dont even register the config if its not avalible
-
         var CFG = VoxyConfig.CONFIG;
 
         var cc = B.registerModOptions("voxy", "Voxy", VoxyCommon.MOD_VERSION)
@@ -38,13 +36,13 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                 },
                 new Page(Component.translatable("voxy.config.general"),
                         new Group(
+                                Component.translatable("voxy.config.general"),
                                 new BoolOption(
                                         "voxy:enabled",
                                         Component.translatable("voxy.config.general.enabled"),
                                         ()->CFG.enabled, v->{
                                             CFG.enabled=v;
-                                            //we need to special case enabled, since the render reload flag runs befor us and its quite important we get it right
-                                            if (v && ClientSessionEvents.inSession) {//We should only load when we are in session
+                                            if (v && ClientSessionEvents.inSession) {
                                                 VoxyCommon.createInstance();
                                             }
                                         })
@@ -56,8 +54,9 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                                 }
                                                 VoxyCommon.shutdownInstance();
                                             }
-                                        }).setPostChangeFlags(RENDER_RELOAD, "voxy:iris_reload").setEnabler(null)
+                                        }).setPostChangeFlags(RENDER_RELOAD, "voxy:iris_reload")
                         ), new Group(
+                                Component.literal("Threads & Ingest"),
                                 new IntOption(
                                         "voxy:thread_count",
                                         Component.translatable("voxy.config.general.serviceThreads"),
@@ -68,16 +67,14 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         "voxy:use_sodium_threads",
                                         Component.translatable("voxy.config.general.useSodiumBuilder"),
                                         ()->!CFG.dontUseSodiumBuilderThreads, v->CFG.dontUseSodiumBuilderThreads=!v)
-                                        .setPostChangeFlags("voxy:update_threads", RENDER_RELOAD)
-                        ), new Group(
+                                        .setPostChangeFlags("voxy:update_threads", RENDER_RELOAD),
                                 new BoolOption(
                                         "voxy:ingest_enabled",
                                         Component.translatable("voxy.config.general.ingest"),
                                         ()->CFG.ingestEnabled, v->CFG.ingestEnabled=v)
-                        )
-                ).setEnabler("voxy:enabled"),
-                new Page(Component.translatable("voxy.config.rendering"),
+                        ),
                         new Group(
+                                Component.translatable("voxy.config.rendering"),
                                 new BoolOption(
                                         "voxy:rendering",
                                         Component.translatable("voxy.config.general.rendering"),
@@ -92,9 +89,7 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                                 }
                                             }
                                         },"voxy:enabled", RENDER_RELOAD)
-                                        .setPostChangeFlags("voxy:iris_reload")
-                                        .setEnabler("voxy:enabled")
-                        ), new Group(
+                                        .setPostChangeFlags("voxy:iris_reload"),
                                 new IntOption(
                                         "voxy:subdivsize",
                                         Component.translatable("voxy.config.general.subDivisionSize"),
@@ -107,31 +102,32 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         Component.translatable("voxy.config.general.renderDistance"),
                                         ()->Math.round(CFG.sectionRenderDistance*16), v->CFG.sectionRenderDistance=((float)v)/16,
                                         new Range(10/*1*16*/, 64*16, 1))
-                                        //The value is stored as a float with respect to the size of top level lods, it its increment is a fraction with respect to the size of the bottom level lod
-                                        // the value is displayed as a chunk render distance
                                         .setFormatter(v->Component.literal(Integer.toString(v*2)))
                                         .setPostChangeRunner(c->{
                                             var vrs = IVoxyRenderSystemHolder.getNullable();
                                             if (vrs != null) {
-                                                //CFG.sectionRenderDistance == c/16
                                                 vrs.setRenderDistance(CFG.sectionRenderDistance);
                                             }
                                         }, "voxy:rendering", RENDER_RELOAD)
                                         .setImpact(OptionImpact.MEDIUM)
-                        ), new Group(
-                                new BoolOption(
-                                        "voxy:eviromental_fog",
-                                        Component.translatable("voxy.config.general.environmental_fog"),
-                                        ()->CFG.useEnvironmentalFog, v->CFG.useEnvironmentalFog=v)
+                        ),
+                        new Group(
+                                Component.literal("Fog & Effects"),
+                                new EnumOption<>("voxy:fog_mode",
+                                        FogMode.class,
+                                        Component.translatable("voxy.config.general.fog_mode"),
+                                        ()->CFG.getFogMode(), v->CFG.setFogMode(v))
+                                        .setNameProvider(FogMode::getComponent)
+                                        .setImpact(OptionImpact.LOW)
                                         .setPostChangeFlags(RENDER_RELOAD),
                                 new EnumOption<>("voxy:ssao_mode",
                                         SSAO.SSAOMode.class,
                                         Component.translatable("voxy.config.general.ssao_mode"),
                                         ()->CFG.getSSAOMode(), v->CFG.setSSAOMode(v))
-                                        .setImpact(OptionImpact.MEDIUM)//TODO make it on igpus this is high
+                                        .setImpact(OptionImpact.MEDIUM)
                                         .setPostChangeFlags(RENDER_RELOAD)
-                        ).setEnablerInherit(s->!IrisUtil.irisShadersEnabledInConfig(), ConfigState.UPDATE_ON_REBUILD)
-                ).setEnablerAND("voxy:enabled", "voxy:rendering"));
+                        )
+                ));
 
     }
 

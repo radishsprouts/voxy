@@ -28,6 +28,9 @@
   "voxy.config.general.environmental_fog": "Enable environmental fog",
   "voxy.config.general.environmental_fog.tooltip": "Enables or disables voxy rendering environmental fog",
 
+  "voxy.config.general.fog_mode": "Fog & Fade Mode",
+  "voxy.config.general.fog_mode.tooltip": "Selects the fog and fade effect mode. Choose from Off, Vanilla (thick), or custom balanced modes to keep distant LODs visible while preserving atmosphere.",
+
   "voxy.config.general.render_fog": "Enable render fog",
   "voxy.config.general.render_fog.tooltip": "Enables or disables render fog effect",
 
